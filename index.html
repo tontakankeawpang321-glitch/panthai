@@ -1,1 +1,763 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ลงประกาศนวดแผนโบราณ - ศูนย์รวมหมอนวดแผนไทย</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+        
+        body { 
+            font-family: 'Sarabun', sans-serif; 
+            background-color: #f0f8ff; /* สีฟ้าอ่อน */
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Slots รูปภาพ */
+        .image-slot {
+            aspect-ratio: 1/1;
+            border: 2px dashed #3b82f6; /* สีฟ้า */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            overflow: hidden;
+            position: relative;
+            background: #fff;
+            transition: all 0.2s;
+        }
+        .image-slot:hover { background-color: #eff6ff; }
+        
+        /* Theme Colors สำหรับนวด/สปา (เน้นฟ้า) */
+        .bg-thai-theme { background-color: #3b82f6; } /* สีฟ้า */
+        .text-thai-theme { color: #3b82f6; }
+        .border-thai-theme { border-color: #3b82f6; }
 
+        /* Animations */
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6; /* สีฟ้า */
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .bottom-nav-item {
+            @apply flex flex-col items-center justify-center text-stone-400 text-[10px] font-bold py-1 flex-1 transition-all;
+        }
+        .bottom-nav-item.active {
+            @apply text-thai-theme;
+        }
+
+        .swal2-image-custom {
+            max-height: 85vh !important;
+            width: auto !important;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            background: white;
+        }
+        
+        .pb-safe-nav { padding-bottom: 80px; }
+    </style>
+</head>
+<body class="min-h-screen flex justify-center items-center p-0 md:p-4 bg-blue-50">
+
+    <!-- Main Container -->
+    <div class="w-full max-w-md bg-[#f0f8ff] shadow-2xl h-screen md:h-[90vh] md:rounded-3xl overflow-hidden relative flex flex-col border border-blue-200" id="app">
+        
+        <!-- ================= VIEW: HOME ================= -->
+        <div id="view-home" class="view h-full flex flex-col">
+            <!-- Header -->
+            <header class="bg-white px-5 pt-6 pb-4 shadow-sm z-20 border-b-2 border-thai-theme">
+                <div class="flex justify-between items-center mb-4">
+                    <h1 class="text-xl font-bold text-stone-800 flex items-center gap-3">
+                        <div class="bg-thai-theme w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-md">
+                            <i data-lucide="leaf"></i>
+                        </div>
+                        <div>
+                            <span class="block text-sm text-stone-500 font-normal">ศูนย์รวมข้อมูล</span>
+                            <span class="text-thai-theme leading-none">หมอนวดแผนไทย</span>
+                        </div>
+                    </h1>
+                    <div class="flex gap-2">
+                        <!-- ปุ่มรีเฟรช (ย้ายมาด้านบน) -->
+                        <button onclick="fetchPosts()" class="p-2 text-stone-400 hover:text-thai-theme hover:bg-blue-50 transition-colors bg-stone-50 rounded-full shadow-sm">
+                            <i data-lucide="refresh-cw" width="20"></i>
+                        </button>
+                        <!-- ปุ่มรายการโปรด (รูปหัวใจ ด้านบน) -->
+                        <button onclick="showFavorites()" class="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors bg-stone-50 rounded-full relative shadow-sm">
+                            <i data-lucide="heart" width="20" class="text-red-500"></i>
+                            <span id="fav-badge" class="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white hidden"></span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Search & Filters -->
+                <div class="space-y-2 mb-2">
+                    <div class="relative shadow-sm">
+                        <i data-lucide="search" class="absolute left-3 top-3 text-stone-400" width="18"></i>
+                        <input type="text" id="search-input" placeholder="ค้นหาชื่อร้าน, หมอนวด, อาการ..." class="w-full pl-10 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:ring-1 focus:ring-thai-theme focus:border-thai-theme outline-none transition-all">
+                    </div>
+
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <select id="filter-province" onchange="handleProvinceChange('filter')" class="w-full pl-8 pr-4 py-2 bg-white border border-stone-200 rounded-lg text-xs text-stone-600 appearance-none focus:border-thai-theme outline-none">
+                                <option value="">ทุกจังหวัด</option>
+                            </select>
+                            <i data-lucide="map" class="absolute left-2.5 top-2.5 text-thai-theme" width="12"></i>
+                        </div>
+                        <div class="relative flex-1">
+                            <select id="filter-amphoe" onchange="renderHome()" class="w-full pl-8 pr-4 py-2 bg-white border border-stone-200 rounded-lg text-xs text-stone-600 appearance-none focus:border-thai-theme outline-none">
+                                <option value="">ทุกอำเภอ</option>
+                            </select>
+                            <i data-lucide="map-pin" class="absolute left-2.5 top-2.5 text-stone-400" width="12"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs หมวดหมู่การนวด -->
+            <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide mt-3" id="type-filters"></div>
+            </header>
+
+            <!-- List -->
+            <div id="post-list" class="flex-1 overflow-y-auto p-4 space-y-4 pb-safe-nav bg-[#f0f8ff]"></div>
+
+            <!-- Bottom Navigation Bar -->
+            <div class="absolute bottom-0 left-0 right-0 bg-white border-t border-stone-200 flex justify-around items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 pb-safe pt-1">
+                <button onclick="router.navigate('home')" class="bottom-nav-item active">
+                    <div class="p-1 mb-0.5"><i data-lucide="home" width="22"></i></div>
+                    หน้าหลัก
+                </button>
+                
+                <div class="-mt-8">
+                     <button onclick="router.navigate('create')" class="bg-thai-theme text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-4 border-[#f0f8ff] hover:scale-105 active:scale-95 transition-transform">
+                        <i data-lucide="plus" width="28"></i>
+                    </button>
+                </div>
+
+                <button onclick="showTextbooks()" class="bottom-nav-item">
+                     <div class="p-1 mb-0.5"><i data-lucide="book-open" width="22"></i></div>
+                    ตำราเรียน
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= VIEW: DETAIL ================= -->
+        <div id="view-detail" class="view h-full flex flex-col bg-white hidden overflow-y-auto z-30">
+            <div id="detail-content"></div>
+        </div>
+
+        <!-- ================= VIEW: CREATE ================= -->
+        <div id="view-create" class="view h-full flex flex-col bg-white hidden z-30">
+            <header class="bg-white px-4 py-4 shadow-sm flex items-center gap-3 border-b border-stone-100 sticky top-0 z-10">
+                <button onclick="router.back()" class="p-2 hover:bg-stone-100 rounded-full transition-colors">
+                    <i data-lucide="chevron-left" class="text-stone-600"></i>
+                </button>
+                <h2 class="text-lg font-bold text-stone-800">ลงประกาศให้บริการนวด</h2>
+            </header>
+
+            <form id="create-form" class="flex-1 overflow-y-auto p-5 space-y-6 pb-10">
+                <!-- Image Upload -->
+                <div class="space-y-3">
+                    <label class="text-sm font-bold text-stone-700 flex items-center gap-2">
+                        <i data-lucide="image" width="16" class="text-thai-theme"></i> รูปภาพร้าน / ใบรับรอง (สูงสุด 3 รูป)
+                    </label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="image-slot" id="slot-0" onclick="triggerFileInput(0)">
+                            <i data-lucide="plus" class="text-stone-300"></i>
+                            <input type="file" id="file-0" accept="image/*" class="hidden" onchange="handleFile(event, 0)">
+                        </div>
+                        <div class="image-slot" id="slot-1" onclick="triggerFileInput(1)">
+                            <i data-lucide="plus" class="text-stone-300"></i>
+                            <input type="file" id="file-1" accept="image/*" class="hidden" onchange="handleFile(event, 1)">
+                        </div>
+                        <div class="image-slot" id="slot-2" onclick="triggerFileInput(2)">
+                            <i data-lucide="plus" class="text-stone-300"></i>
+                            <input type="file" id="file-2" accept="image/*" class="hidden" onchange="handleFile(event, 2)">
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-stone-400 text-right">*แตะที่รูปเพื่อดูขนาดเต็ม</p>
+                </div>
+
+                <!-- Fields -->
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-xs font-bold text-stone-500 mb-1 block">ชื่อร้าน / ชื่อหมอนวด</label>
+                        <input required name="title" class="w-full bg-stone-50 border border-stone-200 rounded-xl p-3 text-sm focus:border-thai-theme outline-none" placeholder="เช่น ร้านบุญรักษานวดแผนไทย, หมอสมใจ แก้อาการ">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-bold text-stone-500 mb-1 block">ประเภทบริการ</label>
+                            <select name="type" class="w-full bg-stone-50 border border-stone-200 rounded-xl p-3 text-sm outline-none">
+                                <option>นวดแผนไทย</option>
+                                <option>นวดน้ำมัน/อโรม่า</option>
+                                <option>นวดฝ่าเท้า</option>
+                                <option>นวดแก้อาการ/จับเส้น</option>
+                                <option>สปา/ขัดผิว/อบสมุนไพร</option>
+                                <option>อยู่ไฟ/ดูแลหลังคลอด</option>
+                                <option>นวดนอกสถานที่</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-stone-500 mb-1 block">ราคาเริ่มต้น</label>
+                            <div class="flex gap-2">
+                                <input required name="price" type="number" class="flex-1 bg-stone-50 border border-stone-200 rounded-xl p-3 text-sm focus:border-thai-theme outline-none" placeholder="0">
+                                <select name="priceUnit" class="w-16 bg-stone-50 border border-stone-200 rounded-xl p-3 text-sm outline-none text-center">
+                                    <option value="ชม.">ชม.</option>
+                                    <option value="คอร์ส">คอร์ส</option>
+                                    <option value="ครั้ง">ครั้ง</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-bold text-stone-500 mb-1 block">จังหวัด</label>
+                            <select name="province" id="create-province" onchange="handleProvinceChange('create')" class="w-full bg-stone-50 border border-stone-200 rounded-xl p-3 text-sm appearance-none outline-none">
+                                <option value="">เลือกจังหวัด</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-stone-500 mb-1 block">อำเภอ/เขต</label>
+                            <select name="amphoe" id="create-amphoe" class="w-full bg-stone-50 border border-stone-200 rounded-xl p-3 text-sm appearance-none outline-none">
+                                <option value="">เลือกอำเภอ</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-bold text-stone-500 mb-1 block">เบอร์โทรศัพท์ติดต่อ</label>
+                            <input required name="phone" type="tel" class="w-full bg-stone-50 border border-stone-200 rounded-xl p-3 text-sm outline-none" placeholder="08X-XXX-XXXX">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-blue-700 mb-1 block">LINE ID (ถ้ามี)</label>
+                            <input name="lineId" class="w-full bg-stone-50 border border-stone-200 rounded-xl p-3 text-sm outline-none" placeholder="ไอดีไลน์">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-bold text-stone-500 mb-1 block">รายละเอียดเพิ่มเติม (ประสบการณ์/ใบรับรอง)</label>
+                        <textarea name="description" rows="4" class="w-full bg-stone-50 border border-stone-200 rounded-xl p-3 text-sm outline-none" placeholder="ระบุรายละเอียดการให้บริการ ประสบการณ์ ใบประกอบวิชาชีพ หรือจุดเด่นของร้าน..."></textarea>
+                    </div>
+                </div>
+
+                <button type="submit" id="submit-btn" class="w-full bg-thai-theme text-white py-3.5 rounded-xl font-bold shadow-lg active:scale-95 transition-all flex justify-center items-center gap-2">
+                    <i data-lucide="save" width="18"></i> บันทึกข้อมูล
+                </button>
+            </form>
+        </div>
+
+    </div>
+
+    <script>
+        // --- CONFIG & DATA ---
+        // ลิงก์ Web App (Google Apps Script)
+        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx6aIKDpn4-k8WWDeBvz4dy91LUBLXG23h7zGDe59X4ctst8bSiFIWfkrNm8p90tV_bvQ/exec'; 
+
+        const massageTypes = ['ทั้งหมด', 'นวดแผนไทย', 'นวดน้ำมัน/อโรม่า', 'นวดฝ่าเท้า', 'นวดแก้อาการ/จับเส้น', 'สปา/ขัดผิว/อบสมุนไพร', 'อยู่ไฟ/ดูแลหลังคลอด', 'นวดนอกสถานที่'];
+        
+        // ข้อมูลลิงก์หนังสือเรียน / อ้างอิง 5 รายการ
+        const textbookLinks = [
+            { title: "กายวิภาคศาสตร์พื้นฐาน", url: "https://script.google.com/macros/s/example1/exec", icon: "book" },
+            { title: "เส้นประธานสิบ", url: "https://script.google.com/macros/s/example2/exec", icon: "activity" },
+            { title: "ตำราแพทย์แผนไทย", url: "https://script.google.com/macros/s/example3/exec", icon: "scroll-text" },
+            { title: "สมุนไพรพื้นบ้าน", url: "https://script.google.com/macros/s/example4/exec", icon: "leaf" },
+            { title: "กฎหมายวิชาชีพนวด", url: "https://script.google.com/macros/s/example5/exec", icon: "scale" }
+        ];
+
+        const allProvinces = [
+            "กรุงเทพมหานคร", "กระบี่", "กาญจนบุรี", "กาฬสินธุ์", "กำแพงเพชร", "ขอนแก่น", "จันทบุรี", "ฉะเชิงเทรา", "ชลบุรี", "ชัยนาท", "ชัยภูมิ", "ชุมพร", "เชียงราย", "เชียงใหม่", "ตรัง", "ตราด", "ตาก", "นครนายก", "นครปฐม", "นครพนม", "นครราชสีมา", "นครศรีธรรมราช", "นครสวรรค์", "นนทบุรี", "นราธิวาส", "น่าน", "บึงกาฬ", "บุรีรัมย์", "ปทุมธานี", "ประจวบคีรีขันธ์", "ปราจีนบุรี", "ปัตตานี", "พระนครศรีอยุธยา", "พะเยา", "พังงา", "พัทลุง", "พิจิตร", "พิษณุโลก", "เพชรบุรี", "เพชรบูรณ์", "แพร่", "ภูเก็ต", "มหาสารคาม", "มุกดาหาร", "แม่ฮ่องสอน", "ยโสธร", "ยะลา", "ร้อยเอ็ด", "ระนอง", "ระยอง", "ราชบุรี", "ลพบุรี", "ลำปาง", "ลำพูน", "เลย", "ศรีสะเกษ", "สกลนคร", "สงขลา", "สตูล", "สมุทรปราการ", "สมุทรสงคราม", "สมุทรสาคร", "สระแก้ว", "สระบุรี", "สิงห์บุรี", "สุโขทัย", "สุพรรณบุรี", "สุราษฎร์ธานี", "สุรินทร์", "หนองคาย", "หนองบัวลำภู", "อ่างทอง", "อำนาจเจริญ", "อุดรธานี", "อุตรดิตถ์", "อุทัยธานี", "อุบลราชธานี"
+        ].sort();
+
+        const districtsData = {
+            "กรุงเทพมหานคร": ["เขตพระนคร", "เขตดุสิต", "เขตหนองจอก", "เขตบางรัก", "เขตบางเขน", "เขตบางกะปิ", "เขตปทุมวัน", "เขตป้อมปราบศัตรูพ่าย", "เขตพระโขนง", "เขตมีนบุรี", "เขตลาดกระบัง", "เขตยานนาวา", "เขตสัมพันธวงศ์", "เขตพญาไท", "เขตธนบุรี", "เขตบางกอกใหญ่", "เขตห้วยขวาง", "เขตคลองสาน", "เขตตลิ่งชัน", "เขตบางกอกน้อย", "เขตบางขุนเทียน", "เขตภาษีเจริญ", "เขตหนองแขม", "เขตราษฎร์บูรณะ", "เขตบางพลัด", "เขตดินแดง", "เขตบึงกุ่ม", "เขตสาทร", "เขตบางซื่อ", "เขตจตุจักร", "เขตบางคอแหลม", "เขตประเวศ", "เขตคลองเตย", "เขตสวนหลวง", "เขตจอมทอง", "เขตดอนเมือง", "เขตราชเทวี", "เขตลาดพร้าว", "เขตวัฒนา", "เขตบางแค", "เขตหลักสี่", "เขตสายไหม", "เขตคันนายาว", "เขตสะพานสูง", "เขตวังทองหลาง", "เขตคลองสามวา", "เขตบางนา", "เขตทวีวัฒนา", "เขตทุ่งครุ", "เขตบางบอน"]
+        };
+
+        // --- STATE MANAGEMENT ---
+        let state = {
+            posts: [],
+            favorites: [], // เก็บรายการโปรด
+            currentView: 'home',
+            images: [null, null, null],
+            filterType: 'ทั้งหมด',
+            selectedPost: null
+        };
+
+        // --- ROUTER ---
+        const router = {
+            navigate: (viewId, data = null) => {
+                document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+                const target = document.getElementById(`view-${viewId}`);
+                if (target) {
+                    target.classList.remove('hidden');
+                    state.currentView = viewId;
+                    if(viewId === 'detail') renderDetail(data);
+                    if(viewId === 'home') renderHome();
+                    window.scrollTo(0, 0);
+                }
+                lucide.createIcons();
+            },
+            back: () => {
+                router.navigate('home');
+            }
+        };
+
+        // --- HELPER FUNCTIONS ---
+        function showTextbooks() {
+            const html = textbookLinks.map(link => `
+                <a href="${link.url}" target="_blank" class="flex items-center gap-3 p-3 mb-2 bg-stone-50 hover:bg-stone-100 rounded-xl border border-stone-200 text-stone-700 transition-colors text-left">
+                    <div class="bg-thai-theme/10 p-2 rounded-lg text-thai-theme"><i data-lucide="${link.icon}" width="20"></i></div>
+                    <div class="font-bold text-sm">${link.title}</div>
+                    <i data-lucide="external-link" width="16" class="ml-auto text-stone-400"></i>
+                </a>
+            `).join('');
+
+            Swal.fire({
+                title: '<div class="text-lg font-bold text-stone-800 flex items-center justify-center gap-2"><i data-lucide="book-open" class="text-thai-theme"></i> หนังสือเรียน / อ้างอิง</div>',
+                html: `<div class="mt-4 max-h-[60vh] overflow-y-auto">${html}</div>`,
+                showCloseButton: true,
+                showConfirmButton: false,
+                customClass: {
+                    popup: 'rounded-2xl'
+                }
+            });
+            lucide.createIcons();
+        }
+
+        function populateProvinceSelects() {
+            const filterSelect = document.getElementById('filter-province');
+            const createSelect = document.getElementById('create-province');
+            const options = allProvinces.map(p => `<option value="${p}">${p}</option>`).join('');
+            if(filterSelect) filterSelect.innerHTML = '<option value="">ทุกจังหวัด</option>' + options;
+            if(createSelect) createSelect.innerHTML = '<option value="">เลือกจังหวัด</option>' + options;
+        }
+
+        function handleProvinceChange(context) {
+            const provSelect = document.getElementById(context === 'filter' ? 'filter-province' : 'create-province');
+            const amphoeSelect = document.getElementById(context === 'filter' ? 'filter-amphoe' : 'create-amphoe');
+            const province = provSelect.value;
+            let districts = districtsData[province];
+            if (!districts && province) {
+                districts = [`เมือง${province}`, "อำเภออื่นๆ"];
+            } else if (!districts) {
+                districts = [];
+            }
+            let html = `<option value="">${context === 'filter' ? 'ทุกอำเภอ' : 'เลือกอำเภอ'}</option>`;
+            districts.forEach(d => html += `<option value="${d}">${d}</option>`);
+            amphoeSelect.innerHTML = html;
+            if (context === 'filter') renderHome();
+        }
+
+        function triggerFileInput(index) { document.getElementById(`file-${index}`).click(); }
+        function handleFile(event, index) {
+            const file = event.target.files[0];
+            if(!file) return;
+            if(file.size > 2 * 1024 * 1024) {
+                Swal.fire('ไฟล์ใหญ่เกินไป', 'กรุณาใช้รูปขนาดไม่เกิน 2MB', 'warning');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                state.images[index] = e.target.result;
+                document.getElementById(`slot-${index}`).innerHTML = `
+                    <img src="${e.target.result}" class="w-full h-full object-cover" onclick="viewImage(event, '${e.target.result}')">
+                    <button type="button" onclick="removeImage(event, ${index})" class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 w-5 h-5 flex items-center justify-center shadow-md z-10"><i data-lucide="x" width="12"></i></button>
+                `;
+                lucide.createIcons();
+            };
+            reader.readAsDataURL(file);
+        }
+        function removeImage(e, index) {
+            e.stopPropagation();
+            state.images[index] = null;
+            document.getElementById(`slot-${index}`).innerHTML = `<i data-lucide="plus" class="text-stone-300"></i><input type="file" id="file-${index}" accept="image/*" class="hidden" onchange="handleFile(event, ${index})">`;
+            lucide.createIcons();
+        }
+
+        function viewImage(e, src) {
+            if(e) e.stopPropagation();
+            if(!src || src.includes('via.placeholder')) return;
+            Swal.fire({
+                imageUrl: src,
+                imageAlt: 'รูปภาพขนาดเต็ม',
+                showConfirmButton: false,
+                showCloseButton: true,
+                background: 'transparent',
+                backdrop: `rgba(0,0,0,0.85)`,
+                customClass: {
+                    popup: 'bg-transparent shadow-none p-0 overflow-visible',
+                    image: 'swal2-image-custom',
+                    closeButton: 'bg-white rounded-full p-2 shadow-lg text-black hover:text-red-600'
+                }
+            });
+        }
+
+        // --- FAVORITES FEATURE (บันทึกแบบ Local Storage & แสดง Dialog) ---
+        function loadFavorites() {
+            const saved = localStorage.getItem('fav_massage_posts');
+            state.favorites = saved ? JSON.parse(saved) : [];
+            updateFavBadge();
+        }
+
+        function toggleFavorite(e, post) {
+            if(e) e.stopPropagation();
+            const index = state.favorites.findIndex(f => f.id === post.id);
+            if (index > -1) {
+                state.favorites.splice(index, 1);
+                const toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+                toast.fire({ icon: 'success', title: 'ลบจากรายการโปรดแล้ว' });
+            } else {
+                state.favorites.push(post);
+                const toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+                toast.fire({ icon: 'success', title: 'บันทึกรายการโปรดแล้ว' });
+            }
+            localStorage.setItem('fav_massage_posts', JSON.stringify(state.favorites));
+            updateFavBadge();
+            renderHome(); // Re-render เพื่อเปลี่ยนสีไอคอนหัวใจในการ์ด
+        }
+
+        function updateFavBadge() {
+            const badge = document.getElementById('fav-badge');
+            if(badge) {
+                if(state.favorites.length > 0) badge.classList.remove('hidden');
+                else badge.classList.add('hidden');
+            }
+        }
+
+        // แสดง Dialog รายการโปรด
+        function showFavorites() {
+            if (state.favorites.length === 0) {
+                 Swal.fire({
+                     icon: 'info',
+                     title: 'รายการโปรด',
+                     text: 'ยังไม่มีรายการหมอนวดที่บันทึกไว้ แตะรูปหัวใจที่ประกาศเพื่อบันทึก',
+                     confirmButtonColor: '#3b82f6'
+                 });
+                 return;
+            }
+            
+            const html = state.favorites.map(p => `
+                <div onclick="swal.close(); router.navigate('detail', ${p.id})" class="flex gap-3 p-3 border-b border-stone-100 items-center cursor-pointer hover:bg-stone-50 text-left transition-colors">
+                    <div class="w-14 h-14 bg-stone-200 rounded-lg overflow-hidden shrink-0 border border-stone-200">
+                        <img src="${p.images && p.images[0] ? p.images[0] : 'https://via.placeholder.com/150?text=No+Image'}" class="w-full h-full object-cover">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-bold text-stone-800 text-sm truncate">${p.title}</div>
+                        <div class="text-xs text-stone-500 mt-1"><span class="bg-stone-100 px-1.5 py-0.5 rounded">${p.type}</span></div>
+                        <div class="text-xs text-thai-theme font-semibold mt-1">฿${p.price.toLocaleString()} / ${p.priceUnit}</div>
+                    </div>
+                    <button onclick="event.stopPropagation(); toggleFavorite(event, ${JSON.stringify(p).replace(/"/g, '&quot;')}); swal.close(); setTimeout(showFavorites, 100);" class="p-2 text-red-500 hover:bg-red-50 rounded-full">
+                        <i data-lucide="trash-2" width="16"></i>
+                    </button>
+                </div>
+            `).join('');
+
+            Swal.fire({
+                title: '<div class="flex items-center gap-2 justify-center text-red-500"><i data-lucide="heart" class="fill-red-500"></i> หมอนวดที่ถูกใจ</div>',
+                html: `<div class="max-h-[60vh] overflow-y-auto -mx-4 px-4">${html}</div>`,
+                showCloseButton: true,
+                showConfirmButton: false,
+                customClass: {
+                    popup: 'rounded-2xl',
+                    title: 'text-lg font-bold text-stone-800'
+                }
+            });
+            lucide.createIcons();
+        }
+
+        function isFavorite(id) {
+            return state.favorites.some(f => f.id === id);
+        }
+
+        // --- API FUNCTIONS ---
+        async function fetchPosts() {
+            const list = document.getElementById('post-list');
+            list.innerHTML = `<div class="flex flex-col items-center justify-center py-20 gap-3"><div class="loader"></div><p class="text-xs text-stone-400">กำลังโหลดข้อมูลหมอนวด...</p></div>`;
+
+            try {
+                const res = await fetch(GAS_API_URL, { method: 'GET', redirect: 'follow' });
+                const json = await res.json();
+                const rawData = json.data || json; 
+                
+                if (!Array.isArray(rawData)) throw new Error('Format ข้อมูลไม่ถูกต้อง');
+
+                state.posts = rawData.map(p => ({
+                    id: p.id,
+                    title: String(p.title || ''),
+                    description: String(p.description || ''),
+                    type: String(p.type || ''),
+                    province: String(p.province || ''),
+                    amphoe: String(p.amphoe || ''),
+                    phone: String(p.phone || ''),
+                    lineId: String(p.lineId || ''),
+                    price: Number(p.price) || 0,
+                    priceUnit: p.priceUnit || '',
+                    images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : [])
+                })).reverse();
+
+                renderHome();
+
+            } catch (err) {
+                console.error(err);
+                list.innerHTML = `<div class="text-center py-10 text-stone-400"><p>โหลดข้อมูลไม่สำเร็จ</p><button onclick="fetchPosts()" class="text-thai-theme underline text-sm mt-2">ลองใหม่</button></div>`;
+            }
+        }
+
+        function renderHome() {
+            const list = document.getElementById('post-list');
+            const search = document.getElementById('search-input').value.toLowerCase();
+            const prov = document.getElementById('filter-province').value;
+            const amphoe = document.getElementById('filter-amphoe').value;
+
+            document.getElementById('type-filters').innerHTML = massageTypes.map(t => 
+                `<button onclick="state.filterType='${t}'; renderHome();" class="px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${state.filterType === t ? 'bg-thai-theme text-white border-thai-theme' : 'bg-white text-stone-500 border-stone-200'}">${t}</button>`
+            ).join('');
+
+            const filtered = state.posts.filter(p => {
+                const matchSearch = (`${p.title} ${p.description}`).toLowerCase().includes(search);
+                const matchType = state.filterType === 'ทั้งหมด' || p.type === state.filterType;
+                const matchProv = !prov || !p.province || p.province === prov;
+                const matchAmphoe = !amphoe || !p.amphoe || p.amphoe === amphoe;
+                return matchSearch && matchType && matchProv && matchAmphoe;
+            });
+
+            if(filtered.length === 0) {
+                list.innerHTML = `<div class="text-center py-10 text-stone-400"><i data-lucide="inbox" class="mx-auto mb-2 opacity-50"></i><p>ไม่พบข้อมูลประกาศ</p></div>`;
+            } else {
+                list.innerHTML = filtered.map(p => {
+                    let imageHtml = '';
+                    if (p.images && p.images.length > 0) {
+                        const slides = p.images.map(img => `
+                            <div class="min-w-full h-full snap-center relative cursor-zoom-in group/img" onclick="viewImage(event, '${img}')">
+                                <img src="${img}" class="w-full h-full object-cover">
+                                <div class="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors flex items-center justify-center">
+                                    <i data-lucide="maximize-2" class="text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow-md" width="20"></i>
+                                </div>
+                            </div>
+                        `).join('');
+                        
+                        imageHtml = `
+                            <div class="w-1/3 bg-stone-100 relative flex overflow-x-auto snap-x snap-mandatory scrollbar-hide">
+                                ${slides}
+                                <span class="absolute top-2 left-2 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded backdrop-blur-sm pointer-events-none z-10">${p.type}</span>
+                                ${p.images.length > 1 ? `<div class="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-1.5 rounded-full pointer-events-none z-10 flex gap-1 items-center"><i data-lucide="layers" width="10"></i> ${p.images.length}</div>` : ''}
+                            </div>
+                        `;
+                    } else {
+                        imageHtml = `
+                            <div class="w-1/3 bg-stone-100 relative flex items-center justify-center">
+                                <img src="https://via.placeholder.com/150?text=No+Image" class="w-full h-full object-cover opacity-50">
+                                <span class="absolute top-2 left-2 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded backdrop-blur-sm pointer-events-none">${p.type}</span>
+                            </div>
+                        `;
+                    }
+
+                    // เช็คสถานะรายการโปรด
+                    const isFav = isFavorite(p.id);
+                    const heartClass = isFav ? "fill-red-500 text-red-500" : "text-stone-300 hover:text-red-500";
+                    const postJson = JSON.stringify(p).replace(/"/g, '&quot;');
+
+                    return `
+                    <div onclick="router.navigate('detail', ${p.id})" class="bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden fade-in cursor-pointer hover:shadow-md transition-shadow group relative">
+                        <div class="flex h-32">
+                            ${imageHtml}
+                            <div class="w-2/3 p-3 flex flex-col justify-between">
+                                <div>
+                                    <div class="flex justify-between items-start">
+                                        <h3 class="font-bold text-stone-800 text-sm line-clamp-2 leading-tight mb-1 pr-6">${p.title}</h3>
+                                        <!-- ปุ่มบันทึกรายการโปรดในการ์ด -->
+                                        <button onclick='toggleFavorite(event, ${postJson})' class="absolute top-3 right-3 p-1 rounded-full bg-white/50 backdrop-blur-sm hover:bg-white transition-all z-20 shadow-sm">
+                                            <i data-lucide="heart" width="16" class="${heartClass}"></i>
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center gap-1 text-[10px] text-stone-500">
+                                        <i data-lucide="map-pin" width="10"></i> ${p.amphoe}, ${p.province}
+                                    </div>
+                                </div>
+                                <div class="flex justify-between items-end mt-2">
+                                    <div class="text-thai-theme font-bold text-lg leading-none">฿${p.price.toLocaleString()}<span class="text-[10px] font-normal text-stone-400">/${p.priceUnit}</span></div>
+                                    <span class="text-[10px] text-stone-400 bg-stone-50 px-2 py-1 rounded-full">ดูข้อมูล ></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `}).join('');
+            }
+            lucide.createIcons();
+        }
+
+        function renderDetail(postId) {
+            const post = state.posts.find(p => p.id == postId);
+            if(!post) return router.back();
+            
+            const container = document.getElementById('detail-content');
+            const slider = post.images.length > 0 
+                ? post.images.map(img => `<div class="shrink-0 w-full h-72 bg-stone-200 snap-center relative cursor-zoom-in" onclick="viewImage(event, '${img}')"><img src="${img}" class="w-full h-full object-cover"></div>`).join('')
+                : `<div class="w-full h-72 bg-stone-100 flex items-center justify-center text-stone-400">ไม่มีรูปภาพ</div>`;
+
+            const isFav = isFavorite(post.id);
+            const favIconClass = isFav ? 'fill-red-500 text-red-500' : 'text-stone-600';
+
+            container.innerHTML = `
+                <div class="relative">
+                    <div class="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide">${slider}</div>
+                    <button onclick="router.back()" class="absolute top-4 left-4 bg-white/80 backdrop-blur p-2 rounded-full shadow-lg text-stone-800"><i data-lucide="arrow-left" width="20"></i></button>
+                    
+                    <!-- ปุ่ม Favorite ในหน้า Detail -->
+                    <button onclick="toggleFavorite(event, ${JSON.stringify(post).replace(/"/g, '&quot;')}); renderDetail(${post.id})" class="absolute top-4 right-14 bg-white/80 backdrop-blur p-2 rounded-full shadow-lg">
+                        <i data-lucide="heart" width="20" class="${favIconClass}"></i>
+                    </button>
+                    
+                    <button onclick="deletePost('${post.id}')" class="absolute top-4 right-4 bg-red-100/80 backdrop-blur p-2 rounded-full shadow-lg text-red-600"><i data-lucide="trash-2" width="20"></i></button>
+                    <div class="absolute bottom-4 right-4 bg-black/50 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm pointer-events-none">
+                        แตะที่รูปเพื่อขยาย
+                    </div>
+                </div>
+                
+                <div class="p-5 pb-24 bg-[#f0f8ff] min-h-screen">
+                    <div class="flex gap-2 mb-3">
+                        <span class="bg-thai-theme/10 text-thai-theme border border-thai-theme/20 text-xs px-2 py-1 rounded font-bold">${post.type}</span>
+                        <span class="bg-stone-100 text-stone-600 border border-stone-200 text-xs px-2 py-1 rounded flex items-center gap-1"><i data-lucide="map-pin" width="10"></i> ${post.amphoe}, ${post.province}</span>
+                    </div>
+                    
+                    <h1 class="text-xl font-bold text-stone-900 mb-2">${post.title}</h1>
+                    <div class="text-2xl font-bold text-thai-theme mb-6">฿${post.price.toLocaleString()} <span class="text-sm text-stone-500 font-normal">/ ${post.priceUnit}</span></div>
+
+                    <div class="space-y-6">
+                        <div class="bg-white p-4 rounded-xl border border-stone-200 shadow-sm">
+                            <h3 class="font-bold text-stone-800 text-sm mb-2 flex items-center gap-2"><i data-lucide="info" width="16" class="text-thai-theme"></i> รายละเอียด / ประสบการณ์</h3>
+                            <p class="text-sm text-stone-600 leading-relaxed whitespace-pre-line">${post.description || '-'}</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h3 class="font-bold text-stone-800 text-sm flex items-center gap-2"><i data-lucide="phone-call" width="16" class="text-thai-theme"></i> ข้อมูลติดต่อจองคิว</h3>
+                            <a href="tel:${post.phone}" class="flex items-center gap-3 p-3 bg-blue-50 text-blue-800 rounded-xl border border-blue-200 hover:bg-blue-100 transition-colors">
+                                <div class="bg-blue-500 text-white p-2 rounded-full shadow-sm"><i data-lucide="phone" width="16"></i></div>
+                                <div><p class="text-[10px] font-bold opacity-70">โทรศัพท์</p><p class="font-bold text-sm">${post.phone}</p></div>
+                            </a>
+                            ${post.lineId ? `
+                            <div class="flex items-center gap-3 p-3 bg-blue-50 text-blue-800 rounded-xl border border-blue-200">
+                                <div class="bg-blue-500 text-white p-2 rounded-full shadow-sm"><i data-lucide="message-circle" width="16"></i></div>
+                                <div><p class="text-[10px] font-bold opacity-70">LINE ID</p><p class="font-bold text-sm">${post.lineId}</p></div>
+                            </div>` : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-stone-200 flex justify-center md:max-w-md md:mx-auto shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)]">
+                    <a href="tel:${post.phone}" class="w-full bg-thai-theme text-white py-3.5 rounded-xl font-bold text-center shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="phone" width="18"></i> โทรจองคิวนวด
+                    </a>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        document.getElementById('create-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submit-btn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span class="loader w-4 h-4 border-white/50 border-t-white mr-2"></span> กำลังบันทึก...`;
+
+            const formData = new FormData(e.target);
+            const data = {
+                action: 'create',
+                id: Date.now().toString(),
+                title: formData.get('title'),
+                type: formData.get('type'),
+                price: formData.get('price'),
+                priceUnit: formData.get('priceUnit'),
+                province: formData.get('province'),
+                amphoe: formData.get('amphoe'),
+                phone: formData.get('phone'),
+                lineId: formData.get('lineId'),
+                description: formData.get('description'),
+                images: state.images.filter(img => img)
+            };
+
+            try {
+                await fetch(GAS_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(data)
+                });
+                await Swal.fire({ icon: 'success', title: 'ลงประกาศสำเร็จ!', confirmButtonColor: '#3b82f6' });
+                e.target.reset();
+                state.images = [null, null, null];
+                fetchPosts();
+                router.navigate('home');
+            } catch (err) {
+                Swal.fire('ผิดพลาด', 'บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        });
+
+        async function deletePost(id) {
+            const result = await Swal.fire({
+                title: 'ยืนยันการลบ?',
+                text: "ประกาศนี้จะถูกลบถาวร",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'ลบประกาศ',
+                cancelButtonText: 'ยกเลิก'
+            });
+
+            if (result.isConfirmed) {
+                Swal.showLoading();
+                try {
+                    await fetch(GAS_API_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'delete', id: id })
+                    });
+                    
+                    // ลบออกจากรายการโปรดด้วยถ้ามี
+                    const favIndex = state.favorites.findIndex(f => f.id == id);
+                    if(favIndex > -1) {
+                        state.favorites.splice(favIndex, 1);
+                        localStorage.setItem('fav_massage_posts', JSON.stringify(state.favorites));
+                        updateFavBadge();
+                    }
+
+                    await fetchPosts();
+                    Swal.fire({icon: 'success', title: 'ลบสำเร็จ', showConfirmButton: false, timer: 1500});
+                    router.navigate('home');
+                } catch (e) {
+                    Swal.fire('เกิดข้อผิดพลาด', '', 'error');
+                }
+            }
+        }
+
+        window.onload = () => {
+            populateProvinceSelects();
+            loadFavorites(); // โหลดรายการโปรดจาก localStorage
+            fetchPosts();
+            document.getElementById('search-input').addEventListener('input', renderHome);
+            lucide.createIcons();
+        };
+
+    </script>
+</body>
+</html>
