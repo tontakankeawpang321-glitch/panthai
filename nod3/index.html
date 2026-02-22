@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="th"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ebook Maker Pro (Fix Save Edition)</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@300;400&amp;family=Chakra+Petch:wght@300;400&amp;family=Itim&amp;family=Kanit:wght@300;400&amp;family=Krub:wght@300;400&amp;family=Mali:wght@300;400&amp;family=Niramit:wght@300;400&amp;family=Pattaya&amp;family=Pridi:wght@300;400&amp;family=Prompt:wght@300;400&amp;family=Sarabun:wght@300;400&amp;family=Sriracha&amp;family=Taviraj:wght@300;400&amp;family=Trirong:wght@300;400&amp;family=Kodchasan:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<!-- JSZip for Exporting -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- PDF.js for PDF Rendering -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<!-- Tailwind (Disable Preflight) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    corePlugins: {
+      preflight: false,
+    }
+  }
+</script>
+
+<style>
+/* === Global Ebook Styles === */
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  font-family:"Sarabun",sans-serif;
+  background:#0f0f0f;
+  color:#eee;
+  overflow:hidden;
+  transition:0.3s;
+}
+
+/* === THEMES === */
+body.dark{ background:#0f0f0f; color:#eee; }
+body.light{ background:#ffffff; color:#111; }
+body.paper{ background:#f4ecd8; color:#3a2f1b; background-image: radial-gradient(rgba(0,0,0,0.03) 1px, transparent 1px); background-size:4px 4px; }
+body.blue{ background:#101820; color:#c0d6e4; }
+body.matrix{ background:#000000; color:#00ff41; text-shadow: 0 0 2px #003300; }
+
+/* Top Bar Styling */
+.topbar{
+  position:fixed;
+  top:0;
+  width:100%;
+  background:#1a1a1a;
+  padding:10px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  z-index:100;
+  gap:10px;
+  flex-wrap:wrap;
+  border-bottom: 1px solid #333;
+}
+body.light .topbar{background:#f0f0f0; border-color:#ddd;}
+body.paper .topbar{background:#e8dcc3; border-color:#d1c4a9;}
+
+button, select{
+  padding:6px 12px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:14px;
+}
+.file-btn{background:#4CAF50;color:#fff}
+.control-btn{background:#333;color:#fff; border: 1px solid #555;}
+.download-btn{background:#2196F3;color:#fff}
+.add-page-btn{background:#FF9800;color:#fff}
+body.light .control-btn{background:#ddd;color:#111; border-color:#ccc;}
+
+/* Slider (Horizontal by default) */
+.slider{
+  display:flex;
+  height:100vh;
+  width:100vw;
+  overflow-x:auto;
+  scroll-snap-type:x mandatory;
+  scroll-behavior:smooth;
+}
+
+.slide{
+  min-width:100vw;
+  height:100vh;
+  padding:0;
+  /* Use Flexbox with margin:auto for smart centering */
+  display: flex;
+  flex-direction: column;
+  overflow: auto; /* Allow scrolling inside slide when zoomed */
+  scroll-snap-align:start;
+  position: relative;
+}
+
+/* === VERTICAL MODE STYLES === */
+body.vertical-read .slider {
+    display: block;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-snap-type: none;
+    padding-top: 50px;
+}
+
+body.vertical-read .slide {
+    min-width: 100%;
+    width: 100%;
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+    border-bottom: 2px dashed rgba(100,100,100,0.3);
+    padding-bottom: 20px;
+}
+
+body.vertical-read .nav {
+    display: none !important;
+}
+
+/* Standard Slide Content */
+.slide-content {
+    width: 100%;
+    /* Key fix: margin auto centers it, but allows expansion */
+    margin: auto; 
+    padding: 60px 0 100px 0; 
+    position: relative; 
+    flex-shrink: 0; /* Prevent shrinking in flex container */
+    text-align: center; /* Center inline content like images */
+}
+
+/* Delete Page Button Style */
+.delete-page-btn {
+    position: absolute;
+    top: 65px; 
+    right: 20px;
+    background: #ff4444;
+    color: white;
+    border: 1px solid white;
+    padding: 5px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
+    z-index: 60;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    opacity: 0.8;
+    transition: 0.2s;
+}
+.delete-page-btn:hover {
+    opacity: 1;
+    background: #cc0000;
+    transform: scale(1.05);
+}
+
+/* Image Tools */
+.img-wrapper { position: relative; width: 100%; margin: 0; padding: 0; display: block; }
+.slide img { 
+    display: block; 
+    width: 100%; /* Fit width */
+    height: auto; 
+    margin: 0 auto; 
+    object-fit: contain; 
+}
+.img-tools { position: absolute; top: 10px; right: 10px; display: flex; gap: 5px; z-index: 50; }
+.tool-btn { background: rgba(0,0,0,0.7); color: white; border: 1px solid rgba(255,255,255,0.5); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.tool-btn:hover { background: #333; }
+.delete-btn:hover { background: red; }
+.crop-btn:hover { background: #2196F3; }
+
+/* Navigation & Controls */
+.nav{ position:fixed; bottom:20px; right:20px; opacity: 0.8; z-index: 100; }
+.nav button{ font-size:18px; margin-left:5px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+.page-control{ position:fixed; bottom:20px; left:20px; background:#1a1a1a; padding:10px; border-radius:12px; opacity: 0.9; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.3); display: flex; flex-direction: column; align-items: center; }
+body.light .page-control{background:#eee}
+.page-control input[type=range]{ width:150px; margin-top: 5px; }
+
+/* TOC */
+.toc{ position:fixed; top:52px; left:0; width:260px; height:calc(100% - 52px); background:#1b1b1b; overflow-y:auto; transform:translateX(-100%); transition:transform 0.3s ease-in-out; padding:15px; z-index:150; box-shadow: 2px 0 5px rgba(0,0,0,0.5); }
+body.light .toc{background:#f5f5f5}
+.toc.show{ transform:translateX(0); }
+.toc-item-wrapper { display: flex; align-items: center; margin-bottom: 5px; padding: 2px; border-radius: 6px; }
+.toc-item-wrapper:hover { background: rgba(255,255,255,0.1); }
+body.light .toc-item-wrapper:hover { background: rgba(0,0,0,0.05); }
+.toc-item-wrapper.active { background: #4CAF50; color: white; }
+.toc-text { 
+    flex-grow: 1; padding: 6px 10px; cursor: pointer; 
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+    border: 1px solid transparent; 
+    display: block; text-decoration: none; color: inherit; 
+}
+.toc-text[contenteditable="true"]:focus { background: rgba(0,0,0,0.5); border: 1px solid #777; outline: none; color: white; white-space: normal; }
+body.light .toc-text[contenteditable="true"]:focus { background: white; color: black; }
+
+/* TOC Delete Button */
+.toc-del-btn {
+    margin-left: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+    color: #ff6666;
+    opacity: 0.8;
+    transition: 0.2s;
+    flex-shrink: 0;
+}
+.toc-del-btn:hover { opacity: 1; color: #ff0000; transform: scale(1.2); }
+
+/* Modal for Cropping */
+.crop-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+.crop-container { position: relative; max-width: 90%; max-height: 80%; overflow: hidden; border: 2px solid #555; background: #000; }
+.crop-controls { margin-top: 20px; display: flex; gap: 10px; }
+canvas#cropCanvas { display: block; cursor: crosshair; }
+
+/* Loading Indicator */
+#loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:3000; display:none; flex-direction:column; align-items:center; justify-content:center; color:white; }
+.loader { border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 15px; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+.edit-only { display: block; }
+</style>
+<style>*, ::before, ::after {
+    --tw-border-spacing-x: 0;
+    --tw-border-spacing-y: 0;
+    --tw-translate-x: 0;
+    --tw-translate-y: 0;
+    --tw-rotate: 0;
+    --tw-skew-x: 0;
+    --tw-skew-y: 0;
+    --tw-scale-x: 1;
+    --tw-scale-y: 1;
+    --tw-pan-x:  ;
+    --tw-pan-y:  ;
+    --tw-pinch-zoom:  ;
+    --tw-scroll-snap-strictness: proximity;
+    --tw-gradient-from-position:  ;
+    --tw-gradient-via-position:  ;
+    --tw-gradient-to-position:  ;
+    --tw-ordinal:  ;
+    --tw-slashed-zero:  ;
+    --tw-numeric-figure:  ;
+    --tw-numeric-spacing:  ;
+    --tw-numeric-fraction:  ;
+    --tw-ring-inset:  ;
+    --tw-ring-offset-width: 0px;
+    --tw-ring-offset-color: #fff;
+    --tw-ring-color: rgb(59 130 246 / 0.5);
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-ring-shadow: 0 0 #0000;
+    --tw-shadow: 0 0 #0000;
+    --tw-shadow-colored: 0 0 #0000;
+    --tw-blur:  ;
+    --tw-brightness:  ;
+    --tw-contrast:  ;
+    --tw-grayscale:  ;
+    --tw-hue-rotate:  ;
+    --tw-invert:  ;
+    --tw-saturate:  ;
+    --tw-sepia:  ;
+    --tw-drop-shadow:  ;
+    --tw-backdrop-blur:  ;
+    --tw-backdrop-brightness:  ;
+    --tw-backdrop-contrast:  ;
+    --tw-backdrop-grayscale:  ;
+    --tw-backdrop-hue-rotate:  ;
+    --tw-backdrop-invert:  ;
+    --tw-backdrop-opacity:  ;
+    --tw-backdrop-saturate:  ;
+    --tw-backdrop-sepia:  ;
+    --tw-contain-size:  ;
+    --tw-contain-layout:  ;
+    --tw-contain-paint:  ;
+    --tw-contain-style:  
+}
+::backdrop {
+    --tw-border-spacing-x: 0;
+    --tw-border-spacing-y: 0;
+    --tw-translate-x: 0;
+    --tw-translate-y: 0;
+    --tw-rotate: 0;
+    --tw-skew-x: 0;
+    --tw-skew-y: 0;
+    --tw-scale-x: 1;
+    --tw-scale-y: 1;
+    --tw-pan-x:  ;
+    --tw-pan-y:  ;
+    --tw-pinch-zoom:  ;
+    --tw-scroll-snap-strictness: proximity;
+    --tw-gradient-from-position:  ;
+    --tw-gradient-via-position:  ;
+    --tw-gradient-to-position:  ;
+    --tw-ordinal:  ;
+    --tw-slashed-zero:  ;
+    --tw-numeric-figure:  ;
+    --tw-numeric-spacing:  ;
+    --tw-numeric-fraction:  ;
+    --tw-ring-inset:  ;
+    --tw-ring-offset-width: 0px;
+    --tw-ring-offset-color: #fff;
+    --tw-ring-color: rgb(59 130 246 / 0.5);
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-ring-shadow: 0 0 #0000;
+    --tw-shadow: 0 0 #0000;
+    --tw-shadow-colored: 0 0 #0000;
+    --tw-blur:  ;
+    --tw-brightness:  ;
+    --tw-contrast:  ;
+    --tw-grayscale:  ;
+    --tw-hue-rotate:  ;
+    --tw-invert:  ;
+    --tw-saturate:  ;
+    --tw-sepia:  ;
+    --tw-drop-shadow:  ;
+    --tw-backdrop-blur:  ;
+    --tw-backdrop-brightness:  ;
+    --tw-backdrop-contrast:  ;
+    --tw-backdrop-grayscale:  ;
+    --tw-backdrop-hue-rotate:  ;
+    --tw-backdrop-invert:  ;
+    --tw-backdrop-opacity:  ;
+    --tw-backdrop-saturate:  ;
+    --tw-backdrop-sepia:  ;
+    --tw-contain-size:  ;
+    --tw-contain-layout:  ;
+    --tw-contain-paint:  ;
+    --tw-contain-style:  
+}</style></head>
+
+<body class="light">
+
+<!-- Hidden Inputs -->
+
+
+<!-- Loading Overlay -->
+
+
+<!-- Crop Modal -->
+
+
+<div class="topbar">
+  
+
+  <div style="display:flex; gap:5px; align-items:center;">
+    <button class="control-btn" onclick="toggleLayout()" id="layoutBtn">📜 แนวตั้ง</button>
+    <button class="control-btn" onclick="toggleTOC()">สารบัญ</button>
+    <button class="control-btn" onclick="fontSize(1)">A+</button>
+    <button class="control-btn" onclick="fontSize(-1)">A-</button>
+    
+    <select id="pageSelect" onchange="window.location.hash = '#slide-' + this.value" class="control-btn" style="max-width: 70px;"><option value="0">1</option><option value="1">2</option><option value="2">3</option><option value="3">4</option><option value="4">5</option><option value="5">6</option><option value="6">7</option><option value="7">8</option><option value="8">9</option><option value="9">10</option><option value="10">11</option><option value="11">12</option><option value="12">13</option><option value="13">14</option><option value="14">15</option><option value="15">16</option><option value="16">17</option><option value="17">18</option><option value="18">19</option><option value="19">20</option></select>
+  </div>
+</div>
+
+<div class="toc" id="toc"></div>
+
+<div class="slider" id="slider"><div class="slide" id="slide-0" data-name="หน้า 1">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-0"><div class="img-wrapper"><img src="images/img_0.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-1" data-name="หน้า 2">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-1"><div class="img-wrapper"><img src="images/img_1.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-2" data-name="หน้า 3">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-2"><div class="img-wrapper"><img src="images/img_2.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-3" data-name="หน้า 4">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-3"><div class="img-wrapper"><img src="images/img_3.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-4" data-name="หน้า 5">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-4"><div class="img-wrapper"><img src="images/img_4.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-5" data-name="หน้า 6">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-5"><div class="img-wrapper"><img src="images/img_5.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-6" data-name="หน้า 7">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-6"><div class="img-wrapper"><img src="images/img_6.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-7" data-name="หน้า 8">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-7"><div class="img-wrapper"><img src="images/img_7.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-8" data-name="หน้า 9">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-8"><div class="img-wrapper"><img src="images/img_8.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-9" data-name="หน้า 10">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-9"><div class="img-wrapper"><img src="images/img_9.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-10" data-name="หน้า 11">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-10"><div class="img-wrapper"><img src="images/img_10.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-11" data-name="หน้า 12">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-11"><div class="img-wrapper"><img src="images/img_11.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-12" data-name="หน้า 13">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-12"><div class="img-wrapper"><img src="images/img_12.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-13" data-name="หน้า 14">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-13"><div class="img-wrapper"><img src="images/img_13.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-14" data-name="หน้า 15">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-14"><div class="img-wrapper"><img src="images/img_14.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-15" data-name="หน้า 16">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-15"><div class="img-wrapper"><img src="images/img_15.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-16" data-name="หน้า 17">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-16"><div class="img-wrapper"><img src="images/img_16.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-17" data-name="หน้า 18">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-17"><div class="img-wrapper"><img src="images/img_17.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-18" data-name="หน้า 19">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-18"><div class="img-wrapper"><img src="images/img_18.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div><div class="slide" id="slide-19" data-name="หน้า 20">
+        <div class="slide-content">
+            
+            <div class="img-container" id="img-cont-19"><div class="img-wrapper"><img src="images/img_19.jpg" class="editable-img"></div></div>
+            
+        </div>
+    </div></div>
+
+<div class="nav">
+  <button onclick="prev()">◀</button>
+  <button onclick="next()">▶</button>
+</div>
+
+<div class="page-control">
+  <span style="font-size:12px;">หน้า <span id="pageNum">8</span></span>
+  <input type="range" id="pageSlider" min="0" max="19" value="0" oninput="goSlide(this.value)">
+</div>
+
+<script>
+// PDF.js Worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let currentZoom = 1.0;
+let totalSlides = 1; 
+let currentSlideIndexForImg = 0;
+const slider = document.getElementById("slider");
+const loadingOverlay = document.getElementById('loading-overlay');
+const loadingText = document.getElementById('loading-text');
+
+// Initial Setup
+buildTOC();
+goSlide(0); 
+
+// --- Layout Toggle ---
+function toggleLayout() {
+    document.body.classList.toggle('vertical-read');
+    const btn = document.getElementById('layoutBtn');
+    const isVertical = document.body.classList.contains('vertical-read');
+    btn.innerText = isVertical ? "📖 แนวนอน" : "📜 แนวตั้ง";
+    const currentIndex = parseInt(document.getElementById('pageSelect').value) || 0;
+    setTimeout(() => goSlide(currentIndex), 100);
+}
+
+// --- DELETE PAGE LOGIC ---
+function deleteSlide(btn) {
+    if(confirm("ยืนยันลบหน้านี้?")) {
+        const slide = btn.closest('.slide');
+        slide.remove();
+        if(document.querySelectorAll('.slide').length === 0) addNewPage(); 
+        reindexSlides();
+    }
+}
+
+function reindexSlides() {
+    const slides = document.querySelectorAll('.slide');
+    slides.forEach((slide, i) => {
+        slide.id = `slide-${i}`;
+        const addImgBtn = slide.querySelector('.add-img-btn');
+        if(addImgBtn) addImgBtn.setAttribute('onclick', `triggerAddImage(${i})`);
+        const imgCont = slide.querySelector('.img-container');
+        if(imgCont) imgCont.id = `img-cont-${i}`;
+    });
+    buildTOC(); 
+    updateCounters();
+    const current = parseInt(document.getElementById('pageSelect').value) || 0;
+    if(current >= slides.length) goSlide(slides.length - 1);
+    else goSlide(current);
+}
+
+// --- Bulk Upload Logic ---
+document.getElementById('bulkInput').addEventListener('change', async function(e) {
+    const files = Array.from(this.files);
+    if(files.length === 0) return;
+    files.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
+    const slides = document.querySelectorAll('.slide');
+    if(slides.length === 1) {
+        const firstSlide = slides[0];
+        const hasImages = firstSlide.querySelectorAll('img').length > 0;
+        if(!hasImages) slider.innerHTML = ''; 
+    }
+    loadingOverlay.style.display = 'flex';
+    try {
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            loadingText.innerText = `กำลังประมวลผลไฟล์ ${i+1}/${files.length}...`;
+            if (file.type === 'application/pdf') await processPDF(file);
+            else if (file.type.startsWith('image/')) await processImage(file);
+        }
+        reindexSlides();
+        goSlide(0);
+        loadingOverlay.style.display = 'none';
+        alert("นำเข้าข้อมูลเรียบร้อย!");
+    } catch (err) {
+        console.error(err);
+        loadingOverlay.style.display = 'none';
+        alert("เกิดข้อผิดพลาดในการประมวลผลไฟล์");
+    }
+    this.value = ''; 
+});
+
+async function processImage(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            createNewSlide(evt.target.result, file); 
+            resolve();
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+async function processPDF(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        loadingText.innerText = `กำลังแปลง PDF หน้า ${pageNum}/${pdf.numPages}...`;
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 2.0 }); 
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        await page.render({ canvasContext: context, viewport: viewport }).promise;
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+        const imgUrl = URL.createObjectURL(blob);
+        const fakeFile = new File([blob], `pdf_page_${pageNum}.jpg`, { type: 'image/jpeg' });
+        createNewSlide(imgUrl, fakeFile);
+    }
+}
+
+function createNewSlide(imgSrc, fileRef) {
+    const newIndex = document.querySelectorAll('.slide').length;
+    const slideDiv = document.createElement('div');
+    slideDiv.className = 'slide';
+    slideDiv.id = `slide-${newIndex}`;
+    slideDiv.setAttribute('data-name', `หน้า ${newIndex + 1}`);
+    slideDiv.innerHTML = `
+        <div class="slide-content">
+            <button class="delete-page-btn edit-only" onclick="deleteSlide(this)">❌ ลบหน้านี้</button>
+            <div class="img-container" id="img-cont-${newIndex}"></div>
+            <div class="add-img-btn edit-only" onclick="triggerAddImage(${newIndex})">+ เพิ่มรูปภาพ</div>
+        </div>
+    `;
+    slider.appendChild(slideDiv);
+    const container = slideDiv.querySelector(`#img-cont-${newIndex}`);
+    createImageWrapper(container, imgSrc, fileRef);
+}
+
+// --- Core App Logic ---
+function addNewPage() {
+    const newIndex = document.querySelectorAll('.slide').length;
+    const slideDiv = document.createElement('div');
+    slideDiv.className = 'slide';
+    slideDiv.id = `slide-${newIndex}`;
+    slideDiv.setAttribute('data-name', `หน้า ${newIndex + 1}`);
+    slideDiv.innerHTML = `
+        <div class="slide-content">
+            <button class="delete-page-btn edit-only" onclick="deleteSlide(this)">❌ ลบหน้านี้</button>
+            <div class="img-container" id="img-cont-${newIndex}"></div>
+            <div class="add-img-btn edit-only" onclick="triggerAddImage(${newIndex})">+ เพิ่มรูปภาพ</div>
+            <p contenteditable="true" style="padding:0 20px;">เนื้อหา...</p>
+        </div>
+    `;
+    slider.appendChild(slideDiv);
+    addTocItem(newIndex, `หน้า ${newIndex + 1}`);
+    updateCounters();
+    setTimeout(() => goSlide(newIndex), 100);
+}
+
+function triggerAddImage(index) { currentSlideIndexForImg = index; document.getElementById('imgInputGlobal').click(); }
+document.getElementById('imgInputGlobal').addEventListener('change', function(e) {
+    if (this.files && this.files[0]) {
+        const file = this.files[0];
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            const container = document.getElementById(`img-cont-${currentSlideIndexForImg}`);
+            createImageWrapper(container, evt.target.result, file);
+        };
+        reader.readAsDataURL(file);
+    }
+    this.value = ''; 
+});
+
+function createImageWrapper(container, src, fileObj = null) {
+    const wrapper = document.createElement('div'); wrapper.className = 'img-wrapper';
+    const img = document.createElement('img'); 
+    img.src = src; 
+    img.className = 'editable-img';
+    if(fileObj) img.fileRef = fileObj;
+    const tools = document.createElement('div'); tools.className = 'img-tools edit-only';
+    const cropBtn = document.createElement('button'); cropBtn.className = 'tool-btn crop-btn'; cropBtn.innerText = '✂️ ตัดรูป'; cropBtn.onclick = function() { initCrop(img); };
+    const delBtn = document.createElement('button'); delBtn.className = 'tool-btn delete-btn'; delBtn.innerText = '❌ ลบ'; delBtn.onclick = function() { wrapper.remove(); };
+    tools.appendChild(cropBtn); tools.appendChild(delBtn); wrapper.appendChild(img); wrapper.appendChild(tools); container.appendChild(wrapper);
+}
+
+// Cropper
+let cropCanvas = document.getElementById('cropCanvas'), ctx = cropCanvas.getContext('2d'), currentCropImg = null, startX, startY, isDragging = false, rect = {x:0, y:0, w:0, h:0}, imgObj = new Image();
+function initCrop(imgElement) {
+    currentCropImg = imgElement; imgObj.src = imgElement.src;
+    imgObj.onload = function() {
+        const maxWidth = window.innerWidth * 0.9, maxHeight = window.innerHeight * 0.8;
+        let displayW = imgObj.naturalWidth, displayH = imgObj.naturalHeight;
+        if (displayW > maxWidth || displayH > maxHeight) { const ratio = Math.min(maxWidth / displayW, maxHeight / displayH); displayW = displayW * ratio; displayH = displayH * ratio; }
+        cropCanvas.width = displayW; cropCanvas.height = displayH;
+        drawOverlay(); document.getElementById('cropModal').style.display = 'flex';
+    }
+}
+function drawOverlay() {
+    ctx.clearRect(0, 0, cropCanvas.width, cropCanvas.height); ctx.drawImage(imgObj, 0, 0, cropCanvas.width, cropCanvas.height);
+    if (rect.w !== 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, cropCanvas.width, cropCanvas.height);
+        ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = 'black'; ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+        ctx.globalCompositeOperation = 'source-over'; ctx.drawImage(imgObj, rect.x * (imgObj.naturalWidth/cropCanvas.width), rect.y * (imgObj.naturalHeight/cropCanvas.height), rect.w * (imgObj.naturalWidth/cropCanvas.width), rect.h * (imgObj.naturalHeight/cropCanvas.height), rect.x, rect.y, rect.w, rect.h);
+        ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 2; ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+    }
+}
+cropCanvas.addEventListener('mousedown', e => { const bRect = cropCanvas.getBoundingClientRect(); startX = e.clientX - bRect.left; startY = e.clientY - bRect.top; isDragging = true; rect = {x:startX, y:startY, w:0, h:0}; });
+cropCanvas.addEventListener('mousemove', e => { if(!isDragging) return; const bRect = cropCanvas.getBoundingClientRect(); rect.w = (e.clientX - bRect.left) - startX; rect.h = (e.clientY - bRect.top) - startY; drawOverlay(); });
+cropCanvas.addEventListener('mouseup', () => { isDragging = false; });
+function closeCrop() { document.getElementById('cropModal').style.display = 'none'; rect = {x:0, y:0, w:0, h:0}; }
+function applyCrop() {
+    if (rect.w === 0 || rect.h === 0) { closeCrop(); return; }
+    let fx = rect.w < 0 ? rect.x + rect.w : rect.x, fy = rect.h < 0 ? rect.y + rect.h : rect.y, fw = Math.abs(rect.w), fh = Math.abs(rect.h);
+    const scaleX = imgObj.naturalWidth / cropCanvas.width, scaleY = imgObj.naturalHeight / cropCanvas.height;
+    const tempCanvas = document.createElement('canvas'); tempCanvas.width = fw * scaleX; tempCanvas.height = fh * scaleY;
+    tempCanvas.getContext('2d').drawImage(imgObj, fx * scaleX, fy * scaleY, fw * scaleX, fh * scaleY, 0, 0, tempCanvas.width, tempCanvas.height);
+    currentCropImg.src = tempCanvas.toDataURL(); 
+    currentCropImg.fileRef = null; 
+    closeCrop();
+}
+
+// Navigation & Logic
+function next(){ slider.scrollBy({left:window.innerWidth, behavior:"smooth"}); }
+function prev(){ slider.scrollBy({left:-window.innerWidth, behavior:"smooth"}); }
+
+function goSlide(index){ 
+    index = parseInt(index);
+    if (document.body.classList.contains('vertical-read')) {
+        const target = document.getElementById(`slide-${index}`);
+        if(target) slider.scrollTo({top: target.offsetTop - 50, behavior: "smooth"});
+    } else {
+        slider.scrollTo({left:index*window.innerWidth, behavior:"smooth"}); 
+    }
+    updatePageUI(index);
+}
+
+function updatePageUI(index) {
+    index = Math.round(index); 
+    const sliderInput = document.getElementById("pageSlider"), pageNum = document.getElementById("pageNum"), pageSelect = document.getElementById("pageSelect");
+    document.querySelectorAll('.toc-item-wrapper').forEach(d => d.classList.remove('active'));
+    const activeToc = document.getElementById(`toc-wrap-${index}`); if(activeToc) activeToc.classList.add('active');
+    if(sliderInput) sliderInput.value = index; if(pageNum) pageNum.innerText = Number(index)+1; if(pageSelect) pageSelect.value = index;
+}
+
+slider.addEventListener('scroll', () => { 
+    if (document.body.classList.contains('vertical-read')) {
+        const slides = document.querySelectorAll('.slide');
+        let current = 0;
+        slides.forEach((slide, index) => { if (slide.offsetTop <= slider.scrollTop + window.innerHeight/2) current = index; });
+        updatePageUI(current);
+    } else {
+        let index = Math.round(slider.scrollLeft / window.innerWidth); 
+        updatePageUI(index); 
+    }
+});
+
+// TOC
+function buildTOC() {
+    const toc = document.getElementById("toc"); toc.innerHTML = '';
+    document.querySelectorAll('.slide').forEach((slide, index) => { let name = slide.getAttribute('data-name') || `หน้า ${index + 1}`; addTocItem(index, name); });
+    updateCounters();
+}
+function addTocItem(index, name) {
+    const toc = document.getElementById("toc"), wrapper = document.createElement('div'); wrapper.className = 'toc-item-wrapper'; wrapper.id = `toc-wrap-${index}`;
+    
+    // Check if Editor Mode (bulkInput exists)
+    const isEditor = document.getElementById('bulkInput') !== null;
+
+    if (isEditor) {
+        const textDiv = document.createElement('div'); 
+        textDiv.className = 'toc-text'; 
+        textDiv.innerText = name; 
+        textDiv.setAttribute('contenteditable', 'true');
+        textDiv.onclick = (e) => { goSlide(index); toggleTOC(); };
+        textDiv.addEventListener('input', function() { const slide = document.getElementById(`slide-${index}`); if(slide) slide.setAttribute('data-name', this.innerText); });
+        
+        const delBtn = document.createElement('span');
+        delBtn.className = 'toc-del-btn edit-only';
+        delBtn.innerText = '❌';
+        delBtn.title = 'ลบหน้านี้';
+        delBtn.onclick = (e) => {
+            e.stopPropagation();
+            const slide = document.getElementById(`slide-${index}`);
+            if(slide) deleteSlide({ closest: () => slide });
+        };
+        wrapper.appendChild(textDiv);
+        wrapper.appendChild(delBtn);
+    } else {
+        const link = document.createElement('a');
+        link.className = 'toc-text';
+        link.innerText = name;
+        link.href = `#slide-${index}`;
+        link.onclick = () => { toggleTOC(); };
+        link.style.display = 'block';
+        link.style.textDecoration = 'none';
+        link.style.color = 'inherit';
+        wrapper.appendChild(link);
+    }
+    toc.appendChild(wrapper);
+}
+function updateCounters() {
+    totalSlides = document.querySelectorAll('.slide').length;
+    document.getElementById("pageSlider").max = totalSlides - 1;
+    const select = document.getElementById("pageSelect"); select.innerHTML = '';
+    for(let i=0; i<totalSlides; i++) { const opt = document.createElement('option'); opt.value = i; opt.innerText = i+1; select.appendChild(opt); }
+}
+
+// Utils
+function toggleTOC(){ document.getElementById("toc").classList.toggle("show"); }
+function fontSize(change){
+  currentZoom += (change * 0.1); 
+  if(currentZoom < 0.5) currentZoom = 0.5; if(currentZoom > 5.0) currentZoom = 5.0; 
+  
+  const widthPercent = Math.round(currentZoom * 100);
+  document.querySelectorAll(".slide-content").forEach(el => { 
+    el.style.zoom = ""; el.style.transform = ""; 
+    el.style.width = widthPercent + "%";
+    el.style.fontSize = (18 * currentZoom) + "px";
+  });
+}
+function changeTheme(themeName) { document.body.className = themeName; }
+
+// --- EXPORT AS ZIP LOGIC ---
+async function downloadZip(){
+  const zip = new JSZip();
+  const imgFolder = zip.folder("images");
+  
+  const clone = document.documentElement.cloneNode(true);
+  
+  // 1. Cleanup Editor UI (including bulkInput to trigger read-only mode in TOC)
+  const editorTools = clone.querySelectorAll(".edit-only, .delete-page-btn, .toc-del-btn, #cropModal, #imgInputGlobal, #loading-overlay, #bulkInput");
+  editorTools.forEach(el => el.remove());
+  
+  // 2. Disable ContentEditable
+  clone.querySelectorAll("[contenteditable]").forEach(el => el.removeAttribute("contenteditable"));
+  
+  // 3. Clear TOC so it rebuilds in Read-Only mode automatically on load
+  const tocContainer = clone.querySelector('#toc'); // FIX: use querySelector
+  if(tocContainer) tocContainer.innerHTML = '';
+
+  // 4. Transform Select
+  const pageSelect = clone.querySelector('#pageSelect');
+  if(pageSelect) {
+      pageSelect.setAttribute('onchange', "window.location.hash = '#slide-' + this.value");
+  }
+
+  // 5. Inject Export Script
+  const exportScript = document.createElement('script');
+  exportScript.textContent = `
+    // Auto-rebuild TOC in Read-Only Mode
+    window.addEventListener('load', () => {
+        buildTOC(); // This will use the "else" block in addTocItem because #bulkInput is gone
+        if(window.location.hash) {
+            const index = window.location.hash.replace('#slide-', '');
+            goSlide(index);
+        }
+    });
+    window.addEventListener('hashchange', () => {
+        const index = window.location.hash.replace('#slide-', '');
+        goSlide(index);
+    });
+  `;
+  clone.querySelector('body').appendChild(exportScript);
+
+  // 6. Process Images
+  const images = clone.querySelectorAll("img.editable-img");
+  const originalImages = document.querySelectorAll("img.editable-img");
+
+  for(let i=0; i<images.length; i++) {
+      const imgClone = images[i];
+      const imgOriginal = originalImages[i];
+      let filename = `img_${Date.now()}_${i}.jpg`;
+      let data = null;
+
+      if (imgOriginal.fileRef) {
+          data = imgOriginal.fileRef;
+          const ext = data.name ? data.name.split('.').pop() : 'jpg';
+          filename = `img_${i}.${ext}`;
+      } else if (imgOriginal.src.startsWith('data:')) {
+          const base64Data = imgOriginal.src.split(',')[1];
+          filename = `img_cropped_${i}.jpg`;
+          data = base64Data;
+      }
+
+      if (data) {
+          if(imgOriginal.fileRef) imgFolder.file(filename, data);
+          else imgFolder.file(filename, data, {base64: true});
+          imgClone.src = "images/" + filename;
+      }
+  }
+
+  // Add Doctype for safety
+  zip.file("index.html", "<!DOCTYPE html>\n" + clone.outerHTML);
+
+  zip.generateAsync({type:"blob"}).then(function(content) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(content);
+      a.download = "ebook-project.zip";
+      a.click();
+  });
+}
+</script>
+
+<script>
+    // Auto-rebuild TOC in Read-Only Mode
+    window.addEventListener('load', () => {
+        buildTOC(); // This will use the "else" block in addTocItem because #bulkInput is gone
+        if(window.location.hash) {
+            const index = window.location.hash.replace('#slide-', '');
+            goSlide(index);
+        }
+    });
+    window.addEventListener('hashchange', () => {
+        const index = window.location.hash.replace('#slide-', '');
+        goSlide(index);
+    });
+  </script></body></html>
